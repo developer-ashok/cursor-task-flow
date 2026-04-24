@@ -1,0 +1,117 @@
+{
+  "name": "cursor-task-flow",
+  "displayName": "Cursor Task Flow",
+  "description": "Manage and inject task prompts into Cursor AI Chat.",
+  "version": "0.0.1",
+  "publisher": "ashokchandrapal",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ashokchandrapal/cursor-task-flow"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:cursorTaskFlowView",
+    "onCommand:cursorTaskFlow.addTask",
+    "onCommand:cursorTaskFlow.deleteTask",
+    "onCommand:cursorTaskFlow.refreshTasks",
+    "onCommand:cursorTaskFlow.injectTask"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cursor-task-flow",
+          "title": "Cursor Task Flow",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cursor-task-flow": [
+        {
+          "id": "cursorTaskFlowView",
+          "name": "Tasks"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "cursorTaskFlow.refreshTasks",
+        "title": "Refresh Tasks",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "cursorTaskFlow.openDashboard",
+        "title": "Open Dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "cursorTaskFlow.addTask",
+        "title": "Create New Task",
+        "icon": "$(add)"
+      },
+      {
+        "command": "cursorTaskFlow.deleteTask",
+        "title": "Delete Task",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "cursorTaskFlow.injectTask",
+        "title": "Inject Task"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "cursorTaskFlow.refreshTasks",
+          "when": "view == cursorTaskFlowView",
+          "group": "navigation"
+        },
+        {
+          "command": "cursorTaskFlow.openDashboard",
+          "when": "view == cursorTaskFlowView",
+          "group": "navigation"
+        },
+        {
+          "command": "cursorTaskFlow.addTask",
+          "when": "view == cursorTaskFlowView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "cursorTaskFlow.injectTask",
+          "when": "view == cursorTaskFlowView",
+          "group": "inline"
+        },
+        {
+          "command": "cursorTaskFlow.deleteTask",
+          "when": "view == cursorTaskFlowView",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "eslint": "^8.50.0",
+    "typescript": "^5.2.2"
+  }
+}
