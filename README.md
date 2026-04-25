@@ -8,6 +8,28 @@
 - **One-Click Injection**: Instantly populate the Cursor AI Chat or Composer with your selected task prompt.
 - **Customizable Prompts**: Create, edit, and categorize your own prompt templates directly in the file or through the UI.
 - **Auto-Generation**: The extension automatically initializes the `.promptingtasks` file if it doesn't exist.
+- **Telegram Live Sync**: Send prompts from your phone via Telegram and have them automatically injected into Cursor.
+
+## 🚀 Setup Telegram Sync
+
+You can "speak" or type prompts from your phone directly into Cursor!
+
+1.  **Create a Bot**: Message [@BotFather](https://t.me/botfather) on Telegram and create a new bot to get your **API Token**.
+2.  **Open Settings**: In Cursor, go to `Settings` > `Extensions` > `Cursor Task Flow`.
+3.  **Paste Token**: Paste your token into the **Telegram Bot Token** field.
+4.  **Enable**: Check the **Enable Telegram Sync** box.
+5.  **Start Chatting**: Open your new bot in Telegram and send a message.
+
+## 📱 Telegram Remote Control
+
+Your bot is now a full remote task manager:
+
+- **`/tasks`**: See your tasks with interactive buttons (▶️ to run, 🗑️ to delete).
+- **`/add_task`**: Starts a conversation to add a new task remotely.
+- **`/help`**: Shows a summary of available commands.
+- **Bot Menu**: Tap the `[/]` button in Telegram to see the prefilled command list.
+- **Direct Input**: Anything else you type is treated as a raw prompt.
+- **`/send`**: Add this at the end of any text (e.g., `Refactor this /send`) to auto-submit the prompt.
 
 ## 🛠 Tech Stack
 

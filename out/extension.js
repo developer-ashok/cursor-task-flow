@@ -39,8 +39,30 @@ const vscode = __importStar(require("vscode"));
 const taskProvider_1 = require("./taskProvider");
 const taskManager_1 = require("./taskManager");
 const taskDashboard_1 = require("./taskDashboard");
+const telegramManager_1 = require("./telegramManager");
 function activate(context) {
     const taskProvider = new taskProvider_1.TaskProvider();
+    // Read from settings
+    const config = vscode.workspace.getConfiguration('cursorTaskFlow');
+    const token = config.get('telegramBotToken');
+    const enabled = config.get('enableTelegramSync');
+    if (enabled && token) {
+        telegramManager_1.TelegramManager.startSync(token);
+    }
+    // Handle configuration changes
+    vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('cursorTaskFlow')) {
+            const newConfig = vscode.workspace.getConfiguration('cursorTaskFlow');
+            const newToken = newConfig.get('telegramBotToken');
+            const newEnabled = newConfig.get('enableTelegramSync');
+            if (newEnabled && newToken) {
+                telegramManager_1.TelegramManager.startSync(newToken);
+            }
+            else {
+                telegramManager_1.TelegramManager.stopSync();
+            }
+        }
+    });
     // Register the TreeView
     vscode.window.registerTreeDataProvider('cursorTaskFlowView', taskProvider);
     // Register Dashboard Command

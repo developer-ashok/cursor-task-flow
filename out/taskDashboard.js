@@ -42,20 +42,17 @@ class TaskDashboard {
             enableScripts: true,
             retainContextWhenHidden: true
         });
-        panel.webview.html = this._getHtmlForWebview();
-        // If showForm is true, tell the webview to open it
+        const config = vscode.workspace.getConfiguration('cursorTaskFlow');
+        const initialToken = config.get('telegramBotToken') || '';
+        const initialEnabled = config.get('enableTelegramSync') || false;
+        panel.webview.html = this._getHtmlForWebview(initialToken, initialEnabled);
         if (showForm) {
             setTimeout(() => {
                 panel.webview.postMessage({ command: 'openForm' });
             }, 500);
         }
-        // Handle messages from the webview
         panel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
-                case 'getTasks':
-                    const tasks = await taskManager_1.TaskManager.getTasks();
-                    panel.webview.postMessage({ command: 'renderTasks', tasks });
-                    break;
                 case 'saveNewTask':
                     await taskManager_1.TaskManager.saveNewTask(message.title, message.prompt);
                     const updatedTasks = await taskManager_1.TaskManager.getTasks();
@@ -69,23 +66,30 @@ class TaskDashboard {
                     taskProvider.refresh();
                     break;
                 case 'injectTask':
+                    // Close the dashboard first so it doesn't steal focus from chat
+                    panel.dispose();
+                    // Small delay to let the panel close
+                    await new Promise(r => setTimeout(r, 300));
                     await taskManager_1.TaskManager.injectTask(message.task);
+                    break;
+                case 'saveSettings':
+                    const config = vscode.workspace.getConfiguration('cursorTaskFlow');
+                    await config.update('telegramBotToken', message.token, vscode.ConfigurationTarget.Global);
+                    await config.update('enableTelegramSync', message.enabled, vscode.ConfigurationTarget.Global);
+                    vscode.window.showInformationMessage("Telegram Settings Updated!");
                     break;
             }
         });
-        // Initial load
         taskManager_1.TaskManager.getTasks().then(tasks => {
             panel.webview.postMessage({ command: 'renderTasks', tasks });
         });
     }
-    static _getHtmlForWebview() {
+    static _getHtmlForWebview(token, enabled) {
         return `
             <!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Task Dashboard</title>
                 <style>
                     :root {
                         --bg: #0f1117;
@@ -104,178 +108,91 @@ class TaskDashboard {
                         padding: 40px;
                         margin: 0;
                     }
-                    .header {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        margin-bottom: 30px;
-                    }
-                    h1 {
-                        font-size: 28px;
-                        font-weight: 800;
-                        margin: 0;
-                        background: linear-gradient(135deg, #60a5fa 0%, #a855f7 100%);
-                        -webkit-background-clip: text;
-                        -webkit-text-fill-color: transparent;
-                    }
-                    
-                    /* Form Styles */
-                    #taskForm {
-                        display: none;
-                        background: var(--card-bg);
-                        border: 1px solid rgba(255, 255, 255, 0.1);
-                        border-radius: 16px;
-                        padding: 24px;
-                        margin-bottom: 40px;
-                        animation: slideDown 0.3s ease-out;
-                    }
-                    @keyframes slideDown {
-                        from { opacity: 0; transform: translateY(-20px); }
-                        to { opacity: 1; transform: translateY(0); }
-                    }
-                    .form-group {
-                        margin-bottom: 16px;
-                    }
-                    label {
-                        display: block;
-                        font-size: 14px;
-                        font-weight: 600;
-                        margin-bottom: 8px;
-                        color: var(--text-dim);
-                    }
-                    input, textarea {
-                        width: 100%;
-                        background: var(--input-bg);
-                        border: 1px solid rgba(255, 255, 255, 0.1);
-                        border-radius: 8px;
-                        padding: 12px;
-                        color: white;
-                        font-family: inherit;
-                        box-sizing: border-box;
-                    }
-                    input:focus, textarea:focus {
-                        outline: none;
-                        border-color: var(--accent);
-                    }
-                    .form-actions {
-                        display: flex;
-                        gap: 12px;
-                        justify-content: flex-end;
-                    }
-
-                    /* Button Styles */
-                    .btn {
-                        padding: 10px 20px;
-                        border-radius: 8px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        border: none;
-                        transition: all 0.2s;
-                    }
+                    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+                    h1 { font-size: 28px; font-weight: 800; margin: 0; background: linear-gradient(135deg, #60a5fa 0%, #a855f7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+                    .nav-actions { display: flex; gap: 12px; }
+                    .panel { display: none; background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px; margin-bottom: 40px; }
+                    .form-group { margin-bottom: 16px; }
+                    label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--text-dim); }
+                    input, textarea { width: 100%; background: var(--input-bg); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 12px; color: white; font-family: inherit; box-sizing: border-box; }
+                    .checkbox-group { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+                    .btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
                     .btn-primary { background: var(--accent); color: white; }
-                    .btn-primary:hover { background: var(--accent-hover); }
                     .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid rgba(255, 255, 255, 0.1); }
-                    .btn-ghost:hover { background: rgba(255, 255, 255, 0.05); color: white; }
-
-                    .grid {
-                        display: grid;
-                        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-                        gap: 24px;
-                    }
-                    .card {
-                        background: var(--card-bg);
-                        backdrop-filter: blur(10px);
-                        border: 1px solid rgba(255, 255, 255, 0.1);
-                        border-radius: 20px;
-                        padding: 24px;
-                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                        display: flex;
-                        flex-direction: column;
-                    }
-                    .card:hover {
-                        border-color: var(--accent);
-                        transform: translateY(-8px);
-                        box-shadow: 0 12px 24px rgba(0,0,0,0.3);
-                    }
-                    .card h3 {
-                        margin: 0 0 12px 0;
-                        font-size: 20px;
-                        font-weight: 700;
-                    }
-                    .card p {
-                        font-size: 15px;
-                        color: var(--text-dim);
-                        line-height: 1.6;
-                        flex-grow: 1;
-                        margin-bottom: 24px;
-                        display: -webkit-box;
-                        -webkit-line-clamp: 3;
-                        -webkit-box-orient: vertical;
-                        overflow: hidden;
-                    }
-                    .card-actions {
-                        display: flex;
-                        gap: 12px;
-                    }
-                    .btn-inject {
-                        flex-grow: 1;
-                        background: rgba(59, 130, 246, 0.15);
-                        color: var(--accent);
-                        border: 1px solid var(--accent);
-                    }
-                    .btn-inject:hover { background: var(--accent); color: white; }
-                    .btn-delete {
-                        color: var(--danger);
-                        border: 1px solid rgba(239, 68, 68, 0.3);
-                        background: transparent;
-                    }
-                    .btn-delete:hover { background: var(--danger); color: white; }
+                    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+                    .card { background: var(--card-bg); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 24px; transition: all 0.3s ease; display: flex; flex-direction: column; }
+                    .card:hover { border-color: var(--accent); transform: translateY(-8px); }
                 </style>
             </head>
             <body>
                 <div class="header">
                     <h1>Task Flow</h1>
-                    <button class="btn btn-primary" onclick="showForm()">+ Add Task</button>
+                    <div class="nav-actions">
+                        <button class="btn btn-ghost" onclick="toggleSettings()">⚙️ Settings</button>
+                        <button class="btn btn-primary" onclick="showForm()">+ Add Task</button>
+                    </div>
                 </div>
 
-                <div id="taskForm">
+                <div id="settingsPanel" class="panel">
+                    <h2 style="margin-top:0">Telegram Sync Settings</h2>
+                    <div class="form-group">
+                        <label>Bot Token</label>
+                        <input type="password" id="botToken" value="${token}">
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="syncEnabled" ${enabled ? 'checked' : ''}>
+                            Enable Telegram Live Sync
+                        </label>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px;">
+                        <button class="btn btn-ghost" onclick="toggleSettings()">Close</button>
+                        <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+                    </div>
+                </div>
+
+                <div id="taskForm" class="panel">
+                    <h2 style="margin-top:0">Create New Task</h2>
                     <div class="form-group">
                         <label>Task Title</label>
-                        <input type="text" id="title" placeholder="e.g. Optimized Refactor" onkeydown="handleKey(event)">
+                        <input type="text" id="title" onkeydown="handleKey(event)">
                     </div>
                     <div class="form-group">
                         <label>Prompt Template</label>
-                        <textarea id="prompt" rows="4" placeholder="Enter your AI prompt here..." onkeydown="handleKey(event)"></textarea>
+                        <textarea id="prompt" rows="4" onkeydown="handleKey(event)"></textarea>
                     </div>
-                    <div class="form-actions">
+                    <div style="display:flex; justify-content:flex-end; gap:10px;">
                         <button class="btn btn-ghost" onclick="hideForm()">Cancel</button>
-                        <button class="btn btn-primary" onclick="submitTask()">Save Task (Enter)</button>
+                        <button class="btn btn-primary" onclick="submitTask()">Save Task</button>
                     </div>
                 </div>
 
-                <div id="grid" class="grid">
-                    <!-- Tasks will be injected here -->
-                </div>
+                <div id="grid" class="grid"></div>
 
                 <script>
                     const vscode = acquireVsCodeApi();
 
-                    function handleKey(e) {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            if (e.target.tagName === 'TEXTAREA' && !e.metaKey && !e.ctrlKey) return;
-                            submitTask();
-                        }
+                    function toggleSettings() {
+                        const panel = document.getElementById('settingsPanel');
+                        panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+                        document.getElementById('taskForm').style.display = 'none';
+                    }
+
+                    function saveSettings() {
+                        const token = document.getElementById('botToken').value;
+                        const enabled = document.getElementById('syncEnabled').checked;
+                        vscode.postMessage({ command: 'saveSettings', token, enabled });
+                        toggleSettings();
                     }
 
                     function showForm() {
                         document.getElementById('taskForm').style.display = 'block';
+                        document.getElementById('settingsPanel').style.display = 'none';
                         document.getElementById('title').focus();
                     }
 
                     function hideForm() {
                         document.getElementById('taskForm').style.display = 'none';
-                        document.getElementById('title').value = '';
-                        document.getElementById('prompt').value = '';
                     }
 
                     function submitTask() {
@@ -287,12 +204,11 @@ class TaskDashboard {
                         }
                     }
 
-                    function injectTask(task) {
-                        vscode.postMessage({ command: 'injectTask', task });
-                    }
-
-                    function deleteTask(task) {
-                        vscode.postMessage({ command: 'deleteTask', task });
+                    function handleKey(e) {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            if (e.target.tagName === 'TEXTAREA' && !e.metaKey && !e.ctrlKey) return;
+                            submitTask();
+                        }
                     }
 
                     window.addEventListener('message', event => {
@@ -307,19 +223,21 @@ class TaskDashboard {
                     function render(tasks) {
                         const grid = document.getElementById('grid');
                         if (tasks.length === 0) {
-                            grid.innerHTML = '<div style="color: var(--text-dim); text-align: center; grid-column: 1/-1; padding: 40px;">No tasks yet. Click "+ Add Task" to get started!</div>';
+                            grid.innerHTML = '<div style="color: var(--text-dim); text-align: center; grid-column: 1/-1; padding: 40px;">No tasks yet.</div>';
                             return;
                         }
-                        grid.innerHTML = tasks.map(task => \`
-                            <div class="card">
-                                <h3>\${task.title}</h3>
-                                <p>\${task.prompt}</p>
-                                <div class="card-actions">
-                                    <button class="btn btn-inject" onclick='injectTask(\${JSON.stringify(task)})'>Inject to Chat</button>
-                                    <button class="btn btn-delete btn" onclick='deleteTask(\${JSON.stringify(task)})'>Delete</button>
+                        grid.innerHTML = tasks.map(task => {
+                            return \`
+                                <div class="card">
+                                    <h3 style="margin:0 0 12px 0; font-size:20px;">\${task.title}</h3>
+                                    <p style="font-size:14px; color:var(--text-dim); line-height:1.6; margin-bottom:24px; flex-grow:1;">\${task.prompt}</p>
+                                    <div style="display:flex; gap:12px;">
+                                        <button class="btn btn-primary" style="flex-grow:1; justify-content:center;" onclick='vscode.postMessage({command:"injectTask",task:\${JSON.stringify(task)}})'>Inject</button>
+                                        <button class="btn btn-ghost" style="color:var(--danger);" onclick='vscode.postMessage({command:"deleteTask",task:\${JSON.stringify(task)}})'>🗑️</button>
+                                    </div>
                                 </div>
-                            </div>
-                        \`).join('');
+                            \`;
+                        }).join('');
                     }
                 </script>
             </body>

@@ -40,9 +40,8 @@ const path = __importStar(require("path"));
 class TaskManager {
     static async getTasks() {
         const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) {
+        if (!workspaceFolders)
             return [];
-        }
         const filePath = path.join(workspaceFolders[0].uri.fsPath, this.fileName);
         if (!fs.existsSync(filePath)) {
             await this.initializeFile(filePath);
@@ -53,109 +52,81 @@ class TaskManager {
             return JSON.parse(content);
         }
         catch (error) {
-            vscode.window.showErrorMessage(`Failed to read ${this.fileName}: ${error}`);
             return [];
         }
     }
     static async initializeFile(filePath) {
-        const defaultTasks = this.getDefaultTasks();
-        fs.writeFileSync(filePath, JSON.stringify(defaultTasks, null, 2), 'utf8');
-        vscode.window.showInformationMessage(`Initialized ${this.fileName} with default tasks.`);
+        fs.writeFileSync(filePath, JSON.stringify(this.getDefaultTasks(), null, 2), 'utf8');
     }
     static getDefaultTasks() {
         return [
-            {
-                id: "1",
-                title: "Write Unit Tests",
-                prompt: "Please write comprehensive unit tests for the selected code using Jest. Include edge cases and mock dependencies where necessary.",
-                category: "Testing"
-            },
-            {
-                id: "2",
-                title: "Refactor for Readability",
-                prompt: "Refactor this code to improve readability and maintainability. Follow SOLID principles and ensure naming is clear.",
-                category: "Refactoring"
-            }
+            { id: '1', title: 'Refactor Code', prompt: 'Please refactor this code to be more readable and efficient.' },
+            { id: '2', title: 'Add Unit Tests', prompt: 'Please write unit tests for the following code using Jest.' }
         ];
     }
-    static async addTask() {
-        const title = await vscode.window.showInputBox({ prompt: "Enter task title", placeHolder: "e.g. My New Task" });
-        if (!title)
-            return;
-        const prompt = await vscode.window.showInputBox({ prompt: "Enter the prompt template", placeHolder: "e.g. Please refactor this..." });
-        if (!prompt)
-            return;
-        await this.saveNewTask(title, prompt);
-    }
     static async saveNewTask(title, prompt) {
-        try {
-            const tasks = await this.getTasks();
-            const newTask = {
-                id: Date.now().toString(),
-                title,
-                prompt
-            };
-            tasks.push(newTask);
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (workspaceFolders && workspaceFolders.length > 0) {
-                const filePath = path.join(workspaceFolders[0].uri.fsPath, this.fileName);
-                fs.writeFileSync(filePath, JSON.stringify(tasks, null, 2), 'utf8');
-                vscode.window.showInformationMessage(`Task "${title}" saved!`);
-            }
-            else {
-                throw new Error("No open workspace found. Please open a folder first.");
-            }
-        }
-        catch (error) {
-            vscode.window.showErrorMessage(`Error saving task: ${error}`);
+        const tasks = await this.getTasks();
+        tasks.push({ id: Date.now().toString(), title, prompt });
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders) {
+            const filePath = path.join(workspaceFolders[0].uri.fsPath, this.fileName);
+            fs.writeFileSync(filePath, JSON.stringify(tasks, null, 2), 'utf8');
         }
     }
     static async deleteTask(task) {
-        const confirm = await vscode.window.showWarningMessage(`Are you sure you want to delete task "${task.title}"?`, { modal: true }, "Delete");
-        if (confirm !== "Delete")
-            return;
         let tasks = await this.getTasks();
         tasks = tasks.filter(t => t.id !== task.id);
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders) {
             const filePath = path.join(workspaceFolders[0].uri.fsPath, this.fileName);
             fs.writeFileSync(filePath, JSON.stringify(tasks, null, 2), 'utf8');
-            vscode.window.showInformationMessage(`Task "${task.title}" deleted.`);
         }
     }
     static async injectTask(task) {
-        // 1. Copy to clipboard
-        await vscode.env.clipboard.writeText(task.prompt);
-        // 2. Try to focus the AI Chat window
-        // We try multiple known Cursor command IDs
-        const chatCommands = [
-            'aichat.focus',
-            'cursor.chat.focus',
-            'composer.focus',
-            'cursor.composer.focus',
-            'workbench.action.chat.open',
-            'aichat.new'
+        await this.injectText(task.prompt);
+    }
+    /**
+     * Injects text into the Cursor chat window.
+     * This is the SIMPLE approach: copy to clipboard → focus chat → paste.
+     * This is proven to work from the sidebar.
+     */
+    static async injectText(text, _autoSend = false) {
+        try {
+            // 1. Copy text to clipboard
+            await vscode.env.clipboard.writeText(text);
+            // 2. Focus the chat window (same window, not new)
+            try {
+                await vscode.commands.executeCommand('cursor.chat.focus');
+            }
+            catch (e) { }
+            // 3. Wait for focus to settle
+            await new Promise(resolve => setTimeout(resolve, 500));
+            // 4. Paste
+            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+        }
+        catch (error) {
+            vscode.window.showErrorMessage(`Injection failed: ${error}`);
+        }
+    }
+    /**
+     * Attempts to trigger the "Send" button in Cursor's chat.
+     * Note: This is best-effort. Cursor's chat widget doesn't expose
+     * a reliable submit command. You may need to press Enter manually.
+     */
+    static async triggerSend() {
+        const sendCommands = [
+            'aichat.action.submit',
+            'aichat.accept',
+            'cursor.chat.accept',
+            'composer.action.accept',
+            'composer.submit',
+            'workbench.action.chat.acceptInput'
         ];
-        let focused = false;
-        for (const cmd of chatCommands) {
+        for (const cmd of sendCommands) {
             try {
                 await vscode.commands.executeCommand(cmd);
-                focused = true;
-                break;
             }
-            catch (e) {
-                // Command might not exist, ignore and try next
-            }
-        }
-        // 3. Paste the content
-        if (focused) {
-            // Wait slightly longer for the window to open and focus
-            setTimeout(async () => {
-                await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-            }, 300);
-        }
-        else {
-            vscode.window.showInformationMessage(`Prompt copied! Paste it into the chat (Cmd+L or Cmd+I).`);
+            catch (e) { }
         }
     }
 }
