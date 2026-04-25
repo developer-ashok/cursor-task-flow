@@ -70,6 +70,12 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('cursorTaskFlow.openLogs', () => {
+            TaskManager.showDebugLogs();
+        })
+    );
+
     // Initial load message
     console.log('Cursor Task Flow is now active!');
 }

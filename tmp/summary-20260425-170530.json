@@ -1,0 +1,4 @@
+{
+  "summary": "Implemented a deeper fix for non-working send from both Telegram and dashboard by rewriting send orchestration to prioritize existing chat focus, expanding submit command candidates, and adding multiple fallbacks (cursor keybinding cmd+enter/enter, type newline, and macOS AppleScript cmd+enter/enter). Added detailed timestamped debug logging to an output channel so each attempted strategy is visible, plus a new command/menu action to open logs quickly.",
+  "current_status": "Extension now has instrumented send diagnostics and stronger multi-strategy send execution; build passes and remaining diagnostics are package.json activation-event warnings unrelated to runtime behavior."
+}

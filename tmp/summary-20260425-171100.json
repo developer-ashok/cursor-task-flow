@@ -1,0 +1,4 @@
+{
+  "summary": "Used the provided output logs to identify a false-positive submit path: the extension treated `aipopup.action.modal.generate` as successful send even though it did not submit chat. Removed that command from submit candidates and reprioritized focus commands to target real chat focus commands first (`cursor.chat.focus`, `workbench.action.chat.focus`) before legacy fallback. Recompiled successfully and verified no linter errors in the edited send module.",
+  "current_status": "Send pipeline now avoids the known no-op command and is biased toward actual chat focus/submit behavior; ready for another live Telegram and dashboard send verification pass."
+}
