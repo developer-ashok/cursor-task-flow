@@ -37,7 +37,194 @@ exports.TaskManager = void 0;
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const child_process_1 = require("child_process");
+const os = __importStar(require("os"));
+// ─────────────────────────────────────────────────────────────────────────────
+// Ported from cursor-autopilot/src/extension.ts
+// Key insight: Cursor uses Cmd+Enter (not just Enter) for chat submit
+// ─────────────────────────────────────────────────────────────────────────────
+const OPEN_COMMANDS = [
+    'composer.startComposerPrompt',
+    'workbench.action.chat.open'
+];
+const FOCUS_COMMANDS = [
+    'cursor.chat.focus',
+    'workbench.action.chat.focus',
+    'aichat.newfollowupaction'
+];
+const SUBMIT_COMMANDS = [
+    'composer.submitComposerPrompt',
+    'aichat.submitFollowupAction',
+    'composer.sendPrompt',
+    'cursor.chat.send',
+    'cursor.chat.submitMessage',
+    'workbench.action.chat.submit',
+    'workbench.action.chat.acceptInput',
+    'interactive.acceptInput',
+];
+const SEND_KEYBIND = 'cursor.sendKeyBinding';
+const output = vscode.window.createOutputChannel('Cursor Task Flow');
+function log(message) {
+    output.appendLine(`[${new Date().toISOString()}] ${message}`);
+}
+function delay(ms) {
+    return new Promise(r => setTimeout(r, ms));
+}
+function execPromise(cmd) {
+    return new Promise((resolve, reject) => {
+        (0, child_process_1.exec)(cmd, (err) => (err ? reject(err) : resolve()));
+    });
+}
+async function osLevelSend() {
+    if (os.platform() === 'darwin') {
+        // Bring Cursor to front then send Cmd+Enter (NOT just Enter!)
+        await execPromise(`osascript -e 'tell application "Cursor" to activate'`);
+        await delay(300);
+        await execPromise(`osascript -e 'tell application "System Events" to keystroke return using {command down}'`);
+    }
+}
+async function osLevelEnter() {
+    if (os.platform() === 'darwin') {
+        await execPromise(`osascript -e 'tell application "Cursor" to activate'`);
+        await delay(300);
+        await execPromise(`osascript -e 'tell application "System Events" to keystroke return'`);
+    }
+}
+async function executeFirstAvailable(cmds, candidates, label) {
+    for (const id of candidates) {
+        if (!cmds.includes(id)) {
+            continue;
+        }
+        try {
+            log(`${label}: trying "${id}"`);
+            await vscode.commands.executeCommand(id);
+            log(`${label}: success with "${id}"`);
+            return true;
+        }
+        catch (error) {
+            log(`${label}: failed "${id}" (${String(error)})`);
+        }
+    }
+    log(`${label}: no candidate succeeded`);
+    return false;
+}
+async function focusChatInput(cmds, openComposer = true) {
+    if (!cmds) {
+        cmds = await vscode.commands.getCommands(true);
+    }
+    // For trigger-only send, first try focusing existing chat without opening a new composer.
+    const focusedDirectly = await executeFirstAvailable(cmds, FOCUS_COMMANDS, 'focus-chat');
+    if (focusedDirectly) {
+        await delay(120);
+        return true;
+    }
+    if (!openComposer) {
+        return false;
+    }
+    const opened = await executeFirstAvailable(cmds, OPEN_COMMANDS, 'open-chat');
+    await delay(opened ? 250 : 120);
+    const focusedAfterOpen = await executeFirstAvailable(cmds, FOCUS_COMMANDS, 'focus-chat-after-open');
+    await delay(150);
+    return focusedAfterOpen;
+}
+/**
+ * Injects text and optionally submits — ported from cursor-autopilot.
+ * Steps: Open composer → focus → paste → submit → OS fallback (Cmd+Enter)
+ */
+async function injectTextToChat(text, autoSend = false) {
+    const cmds = await vscode.commands.getCommands(true);
+    log(`inject: requested autoSend=${autoSend}, textLength=${text.length}`);
+    // 1/2. Ensure chat input focus
+    await focusChatInput(cmds, true);
+    await delay(200);
+    // 3. Paste text
+    await vscode.env.clipboard.writeText(text);
+    if (cmds.includes(SEND_KEYBIND)) {
+        log('inject: using cursor.sendKeyBinding for paste');
+        await vscode.commands.executeCommand(SEND_KEYBIND, {
+            text: os.platform() === 'darwin' ? 'cmd+v' : 'ctrl+v'
+        });
+    }
+    else {
+        log('inject: using editor.action.clipboardPasteAction');
+        await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+    }
+    await delay(200);
+    // 4. Submit if autoSend
+    if (autoSend) {
+        await submitChat(cmds);
+    }
+}
+async function submitChat(cmds) {
+    if (!cmds) {
+        cmds = await vscode.commands.getCommands(true);
+    }
+    log('submit: started');
+    // Try built-in submit commands first
+    const commandSubmitWorked = await executeFirstAvailable(cmds, SUBMIT_COMMANDS, 'submit-command');
+    if (commandSubmitWorked) {
+        log('submit: completed via submit command');
+        return true;
+    }
+    if (cmds.includes(SEND_KEYBIND)) {
+        try {
+            log('submit: trying cursor.sendKeyBinding cmd+enter');
+            await vscode.commands.executeCommand(SEND_KEYBIND, {
+                text: os.platform() === 'darwin' ? 'cmd+enter' : 'ctrl+enter'
+            });
+            log('submit: completed via sendKeyBinding cmd+enter');
+            return true;
+        }
+        catch {
+            log('submit: sendKeyBinding cmd+enter failed');
+        }
+        try {
+            log('submit: trying cursor.sendKeyBinding enter');
+            await vscode.commands.executeCommand(SEND_KEYBIND, {
+                text: 'enter'
+            });
+            log('submit: completed via sendKeyBinding enter');
+            return true;
+        }
+        catch {
+            log('submit: sendKeyBinding enter failed');
+        }
+    }
+    try {
+        log('submit: trying type command newline');
+        await vscode.commands.executeCommand('type', { text: '\n' });
+        log('submit: completed via type newline');
+        return true;
+    }
+    catch {
+        log('submit: type newline failed');
+    }
+    // OS-level fallback: Cmd+Enter via AppleScript
+    try {
+        log('submit: trying osLevelSend (cmd+enter)');
+        await osLevelSend();
+        log('submit: completed via osLevelSend');
+        return true;
+    }
+    catch {
+        log('submit: osLevelSend failed');
+    }
+    // Final OS fallback: plain Enter (for users with Enter-to-send)
+    try {
+        log('submit: trying osLevelEnter');
+        await osLevelEnter();
+        log('submit: completed via osLevelEnter');
+        return true;
+    }
+    catch {
+        log('submit: osLevelEnter failed');
+        return false;
+    }
+}
 class TaskManager {
+    static showDebugLogs() {
+        output.show(true);
+    }
     static async getTasks() {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders)
@@ -83,50 +270,44 @@ class TaskManager {
         }
     }
     static async injectTask(task) {
-        await this.injectText(task.prompt);
+        await injectTextToChat(task.prompt, false);
     }
-    /**
-     * Injects text into the Cursor chat window.
-     * This is the SIMPLE approach: copy to clipboard → focus chat → paste.
-     * This is proven to work from the sidebar.
-     */
-    static async injectText(text, _autoSend = false) {
+    static async injectText(text, autoSend = false) {
         try {
-            // 1. Copy text to clipboard
-            await vscode.env.clipboard.writeText(text);
-            // 2. Focus the chat window (same window, not new)
-            try {
-                await vscode.commands.executeCommand('cursor.chat.focus');
-            }
-            catch (e) { }
-            // 3. Wait for focus to settle
-            await new Promise(resolve => setTimeout(resolve, 500));
-            // 4. Paste
-            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+            await injectTextToChat(text, autoSend);
         }
         catch (error) {
+            log(`inject: failed (${String(error)})`);
             vscode.window.showErrorMessage(`Injection failed: ${error}`);
         }
     }
     /**
-     * Attempts to trigger the "Send" button in Cursor's chat.
-     * Note: This is best-effort. Cursor's chat widget doesn't expose
-     * a reliable submit command. You may need to press Enter manually.
+     * Triggers the chat Send button.
+     * Uses cursor-autopilot's proven approach:
+     * built-in submit commands → Cmd+Enter keybind → AppleScript Cmd+Enter
      */
     static async triggerSend() {
-        const sendCommands = [
-            'aichat.action.submit',
-            'aichat.accept',
-            'cursor.chat.accept',
-            'composer.action.accept',
-            'composer.submit',
-            'workbench.action.chat.acceptInput'
-        ];
-        for (const cmd of sendCommands) {
-            try {
-                await vscode.commands.executeCommand(cmd);
+        try {
+            const cmds = await vscode.commands.getCommands(true);
+            log('triggerSend: requested');
+            // First try to send in the currently open chat input.
+            await focusChatInput(cmds, false);
+            let sent = await submitChat(cmds);
+            if (sent) {
+                log('triggerSend: success on existing chat');
+                return true;
             }
-            catch (e) { }
+            // If that fails, open/focus chat and retry once.
+            log('triggerSend: retrying after open/focus chat');
+            await focusChatInput(cmds, true);
+            sent = await submitChat(cmds);
+            log(`triggerSend: final result=${sent}`);
+            return sent;
+        }
+        catch (error) {
+            log(`triggerSend: failed (${String(error)})`);
+            vscode.window.showErrorMessage(`Send failed: ${error}`);
+            return false;
         }
     }
 }

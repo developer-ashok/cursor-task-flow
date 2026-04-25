@@ -1,0 +1,4 @@
+{
+  "summary": "Addressed the reported send-control failures by fixing two paths: dashboard-triggered send now force-focuses chat and uses stronger submit fallbacks, and Telegram command parsing now supports bot-suffixed commands like /send@BotName. Also improved Telegram feedback to report whether send trigger succeeded and made '/send' suffix parsing more robust for free-text injection.",
+  "current_status": "Core send pipeline from dashboard and Telegram is now hardened and compiles cleanly; plugin should now route send actions to actual Cursor chat more reliably."
+}

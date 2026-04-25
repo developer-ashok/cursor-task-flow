@@ -1,0 +1,4 @@
+{
+  "summary": "Reviewed the plugin and fixed the dashboard Send button flow so the Up Arrow send action no longer depends on webview focus. The send path now explicitly focuses Cursor chat input before submitting, hardens submit fallback handling, and keeps a macOS Cmd+Enter fallback. TypeScript compiles cleanly and no linter errors were reported for edited files.",
+  "current_status": "Dashboard-triggered chat send reliability is improved in source and compiled output; one additional review risk remains in webview rendering where task content is injected into innerHTML without escaping."
+}

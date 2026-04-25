@@ -3,5 +3,15 @@
     "id": "1",
     "title": "Refactor Code",
     "prompt": "Please refactor this code to be more readable and efficient."
+  },
+  {
+    "id": "1777116519668",
+    "title": "Review this project",
+    "prompt": "Review this project"
+  },
+  {
+    "id": "1777117708783",
+    "title": "Sample task",
+    "prompt": "Sample task 123"
   }
 ]

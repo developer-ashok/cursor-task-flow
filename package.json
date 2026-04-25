@@ -2,13 +2,13 @@
   "name": "cursor-task-flow",
   "displayName": "Cursor Task Flow",
   "description": "Manage and inject task prompts into Cursor AI Chat.",
-  "version": "0.0.1",
-  "publisher": "ashokchandrapal",
+  "version": "0.0.3",
+  "publisher": "developer-ashok",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ashokchandrapal/cursor-task-flow.git"
+    "url": "https://github.com/developer-ashok/cursor-task-flow"
   },
   "engines": {
     "vscode": "^1.80.0"
@@ -21,7 +21,8 @@
     "onCommand:cursorTaskFlow.addTask",
     "onCommand:cursorTaskFlow.deleteTask",
     "onCommand:cursorTaskFlow.refreshTasks",
-    "onCommand:cursorTaskFlow.injectTask"
+    "onCommand:cursorTaskFlow.injectTask",
+    "onCommand:cursorTaskFlow.openLogs"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -57,6 +58,11 @@
         "command": "cursorTaskFlow.addTask",
         "title": "Create New Task",
         "icon": "$(add)"
+      },
+      {
+        "command": "cursorTaskFlow.openLogs",
+        "title": "Open Debug Logs",
+        "icon": "$(output)"
       }
     ],
     "menus": {
@@ -73,6 +79,11 @@
         },
         {
           "command": "cursorTaskFlow.addTask",
+          "when": "view == cursorTaskFlowView",
+          "group": "navigation"
+        },
+        {
+          "command": "cursorTaskFlow.openLogs",
           "when": "view == cursorTaskFlowView",
           "group": "navigation"
         }

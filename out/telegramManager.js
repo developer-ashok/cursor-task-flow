@@ -36,6 +36,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TelegramManager = void 0;
 const https = __importStar(require("https"));
 const taskManager_1 = require("./taskManager");
+function parseCommand(text) {
+    if (!text.startsWith('/'))
+        return null;
+    const token = text.split(/\s+/)[0];
+    return token.split('@')[0];
+}
+function parseAutoSendSuffix(text) {
+    const match = text.match(/^(.*?)(?:\s+)?\/send(?:@\w+)?\s*$/i);
+    if (!match) {
+        return { cleanText: text, autoSend: false };
+    }
+    return { cleanText: match[1].trim(), autoSend: true };
+}
 class TelegramManager {
     static async startSync(token) {
         this.botToken = token;
@@ -108,11 +121,12 @@ class TelegramManager {
                             if (update.message && update.message.text) {
                                 const text = update.message.text.trim();
                                 const state = this.userStates.get(chatId) || { step: 'none' };
+                                const parsedCommand = parseCommand(text);
                                 const isCommand = text.startsWith('/');
                                 const knownCommands = ['/tasks', '/add_task', '/help', '/start', '/send'];
-                                if (isCommand && !knownCommands.includes(text.split(' ')[0]) && state.step === 'none')
+                                if (isCommand && (!parsedCommand || !knownCommands.includes(parsedCommand)) && state.step === 'none')
                                     continue;
-                                if (text === '/add_task') {
+                                if (parsedCommand === '/add_task') {
                                     this.userStates.set(chatId, { step: 'awaiting_title' });
                                     await this.sendToTelegram('sendMessage', { chat_id: chatId, text: "📝 What is the Title of the new task?" });
                                 }
@@ -125,7 +139,7 @@ class TelegramManager {
                                     this.userStates.set(chatId, { step: 'none' });
                                     await this.sendToTelegram('sendMessage', { chat_id: chatId, text: "✅ Task saved to Cursor!" });
                                 }
-                                else if (text === '/tasks') {
+                                else if (parsedCommand === '/tasks') {
                                     const tasks = await taskManager_1.TaskManager.getTasks();
                                     const buttons = tasks.map(t => [
                                         { text: `▶️ ${t.title}`, callback_data: `run_${t.id}` },
@@ -137,11 +151,14 @@ class TelegramManager {
                                         reply_markup: { inline_keyboard: buttons }
                                     });
                                 }
-                                else if (text === '/send') {
-                                    await taskManager_1.TaskManager.triggerSend();
-                                    await this.sendToTelegram('sendMessage', { chat_id: chatId, text: "🚀 Clicked!" });
+                                else if (parsedCommand === '/send') {
+                                    const sent = await taskManager_1.TaskManager.triggerSend();
+                                    await this.sendToTelegram('sendMessage', {
+                                        chat_id: chatId,
+                                        text: sent ? "🚀 Sent to Cursor chat." : "⚠️ Could not trigger send. Make sure Cursor chat is open."
+                                    });
                                 }
-                                else if (text === '/help' || text === '/start') {
+                                else if (parsedCommand === '/help' || parsedCommand === '/start') {
                                     await this.sendToTelegram('sendMessage', {
                                         chat_id: chatId,
                                         text: "🚀 *Cursor Task Flow Bot*\n\n• Send text to inject it into Cursor.\n• Add `/send` at the end to auto-submit.\n• Send `/send` by itself to just click the button.\n• Use `/tasks` to manage tasks.",
@@ -149,8 +166,7 @@ class TelegramManager {
                                     });
                                 }
                                 else {
-                                    let autoSend = text.endsWith('/send');
-                                    let cleanText = autoSend ? text.substring(0, text.length - 5).trim() : text;
+                                    const { autoSend, cleanText } = parseAutoSendSuffix(text);
                                     if (cleanText)
                                         await taskManager_1.TaskManager.injectText(cleanText, autoSend);
                                 }
