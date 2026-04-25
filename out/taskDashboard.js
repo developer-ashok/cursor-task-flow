@@ -68,9 +68,12 @@ class TaskDashboard {
                 case 'injectTask':
                     // Close the dashboard first so it doesn't steal focus from chat
                     panel.dispose();
-                    // Small delay to let the panel close
                     await new Promise(r => setTimeout(r, 300));
                     await taskManager_1.TaskManager.injectTask(message.task);
+                    break;
+                case 'triggerSend':
+                    // Do NOT close the panel — AppleScript targets Cursor process directly
+                    await taskManager_1.TaskManager.triggerSend();
                     break;
                 case 'saveSettings':
                     const config = vscode.workspace.getConfiguration('cursorTaskFlow');
@@ -119,6 +122,8 @@ class TaskDashboard {
                     .btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
                     .btn-primary { background: var(--accent); color: white; }
                     .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid rgba(255, 255, 255, 0.1); }
+                    .btn-send { background: linear-gradient(135deg, #10b981, #059669); color: white; box-shadow: 0 0 12px rgba(16,185,129,0.4); }
+                    .btn-send:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(16,185,129,0.6); }
                     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
                     .card { background: var(--card-bg); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 24px; transition: all 0.3s ease; display: flex; flex-direction: column; }
                     .card:hover { border-color: var(--accent); transform: translateY(-8px); }
@@ -129,6 +134,7 @@ class TaskDashboard {
                     <h1>Task Flow</h1>
                     <div class="nav-actions">
                         <button class="btn btn-ghost" onclick="toggleSettings()">⚙️ Settings</button>
+                        <button class="btn btn-send" onclick="doSend()" title="Trigger Send button in Cursor chat">⬆ Send</button>
                         <button class="btn btn-primary" onclick="showForm()">+ Add Task</button>
                     </div>
                 </div>
@@ -171,6 +177,10 @@ class TaskDashboard {
 
                 <script>
                     const vscode = acquireVsCodeApi();
+
+                    function doSend() {
+                        vscode.postMessage({ command: 'triggerSend' });
+                    }
 
                     function toggleSettings() {
                         const panel = document.getElementById('settingsPanel');

@@ -86,6 +86,9 @@ function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand('cursorTaskFlow.injectTask', async (task) => {
         await taskManager_1.TaskManager.injectTask(task);
     }));
+    context.subscriptions.push(vscode.commands.registerCommand('cursorTaskFlow.openLogs', () => {
+        taskManager_1.TaskManager.showDebugLogs();
+    }));
     // Initial load message
     console.log('Cursor Task Flow is now active!');
 }
